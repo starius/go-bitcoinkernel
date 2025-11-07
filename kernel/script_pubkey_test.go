@@ -32,6 +32,53 @@ func TestScriptPubkeyFromRaw(t *testing.T) {
 	}
 }
 
+func TestScriptPubkeyEmpty(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{name: "nil slice", data: nil},
+		{name: "empty slice", data: []byte{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scriptPubkey := NewScriptPubkey(tt.data)
+			if scriptPubkey == nil {
+				t.Fatal("ScriptPubkey is nil")
+			}
+			defer scriptPubkey.Destroy()
+
+			bytes, err := scriptPubkey.Bytes()
+			if err != nil {
+				t.Fatalf("ScriptPubkey.Bytes() error = %v", err)
+			}
+			if len(bytes) != 0 {
+				t.Fatalf("Expected empty script serialization, got %x", bytes)
+			}
+
+			// Minimal coinbase-style transaction with a single empty scriptSig and
+			// zero-value output; used to trigger verification paths.
+			txHex := "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffff0100000000000000000000000000"
+			txBytes, err := hex.DecodeString(txHex)
+			if err != nil {
+				t.Fatalf("Failed to decode transaction hex: %v", err)
+			}
+			tx, err := NewTransaction(txBytes)
+			if err != nil {
+				t.Fatalf("Failed to create transaction: %v", err)
+			}
+			defer tx.Destroy()
+
+			var scriptErr *ScriptVerifyError
+			err = scriptPubkey.Verify(0, tx, nil, 0, ScriptFlagsVerifyNone)
+			if err == nil || !errors.As(err, &scriptErr) {
+				t.Fatalf("Expected script verification error for empty script, got %v", err)
+			}
+		})
+	}
+}
+
 func TestScriptPubkeyCopy(t *testing.T) {
 	scriptHex := "76a914389ffce9cd9ae88dcc0631e88a821ffdbe9bfe26158088ac"
 	scriptBytes, err := hex.DecodeString(scriptHex)
